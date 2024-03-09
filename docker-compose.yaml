@@ -1,0 +1,58 @@
+version: "3.8"
+services:
+  db:
+    image: postgres
+    volumes:
+      - ./backend/pg_data:/var/lib/postgresql/data
+    environment:
+      - POSTGRES_DB=postgres
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+    container_name: postgres_db
+  
+  redis:
+    image: redis:alpine
+
+  django:
+    build: ./backend
+    volumes:
+      - ./backend:/app
+      - static_files:/app/staticfiles
+    expose:
+      - 8000
+    command: gunicorn backend.wsgi --bind 0.0.0.0:8000
+    depends_on:
+      - db
+  
+  celery:
+    restart: always
+    build: ./backend
+    volumes:
+      - ./backend:/app
+    command: celery -A backend worker -l INFO
+    depends_on:
+      - db
+      - redis
+      - django
+  
+  react:
+    build:
+      context: ./frontend
+    volumes:
+      - react_build:/app/build
+  
+  nginx:
+    build: ./nginx
+    ports:
+      - 80:80
+    volumes:
+      - ./nginx/nginx-setup.conf:/etc/nginx/conf.d/default.conf:ro
+      - react_build:/var/www/react
+      - static_files:/var/www/django/staticfiles
+    depends_on:
+      - django
+      - react
+
+volumes:
+  react_build:
+  static_files:
